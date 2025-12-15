@@ -1,4 +1,4 @@
-package mtssmsdiscount
+package smsmtsds
 
 import (
 	"bytes"
