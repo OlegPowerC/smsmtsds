@@ -1,3 +1,3 @@
-module github.com/OlegPowerC/smsmtsd
+module github.com/OlegPowerC/smsmtsds
 
-go 1.24
+go 1.24.2
