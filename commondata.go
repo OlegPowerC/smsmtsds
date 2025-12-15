@@ -57,3 +57,8 @@ func (APIstruct *SMSapi) NormalizePhoneNumber(number string) (normalizednumber s
 	}
 	return NormalizedNumber, nil
 }
+
+func (APIstruct *SMSapi) SendSMS(ClienName string, PhoneNumber string, Data string) error {
+	err := APIstruct.sendMessageDS(ClienName, PhoneNumber, Data)
+	return err
+}
