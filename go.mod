@@ -1,3 +1,3 @@
-module github.com/OlegPowerC/smsmtsds
+module smsmtsds
 
 go 1.24.2
