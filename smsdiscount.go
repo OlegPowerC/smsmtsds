@@ -296,7 +296,7 @@ func (APIstruct *SMSapi) dsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 											(*APIstruct.msg_intid_q_status)[0].stringstatuscode = CStatusCode
 											LogStatusText, EndStatuscode = checkMStateInQDS(StatusEntry)
 											if LogStatusText != DS_STATUSSTRING_Sending_na {
-												LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
+												LogMsg := fmt.Sprintf("Client: %s, message local id: %d, remote id: %d to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
 												APIstruct.loggerp.Println(LogMsg)
 											}
 										}
