@@ -212,6 +212,9 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 		APIstruct.msg_qmutex.Lock()
 		(*APIstruct.msg_intid_q_status) = append(*APIstruct.msg_intid_q_status, stfordata{time.Now().Unix(), MsgIds, InternalId, 0, 0, 0, "", ClienName, PhoneNumber, 0})
 		APIstruct.msg_qmutex.Unlock()
+
+		LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", ClienName, MsgIds, InternalId, PhoneNumber, "API POST")
+		APIstruct.loggerp.Println(LogMsg)
 	}
 	return nil
 }

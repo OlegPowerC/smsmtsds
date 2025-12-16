@@ -147,6 +147,8 @@ func (APIstruct *SMSapi) sendMessageDS(ClienName string, PhoneNumber string, Dat
 		APIstruct.msg_qmutex.Lock()
 		(*APIstruct.msg_intid_q_status) = append(*APIstruct.msg_intid_q_status, stfordata{time.Now().Unix(), "", "", MsgIds, InternalId, 0, DS_STATUSSTRING_Sending_na, ClienName, PhoneNumber, 0})
 		APIstruct.msg_qmutex.Unlock()
+		LogMsg := fmt.Sprintf("Client: %s, message local id: %d, remote id: %d to: %s ,status: %s", ClienName, MsgIds, InternalId, PhoneNumber, "API POST")
+		APIstruct.loggerp.Println(LogMsg)
 	}
 
 	return nil
@@ -296,7 +298,7 @@ func (APIstruct *SMSapi) dsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 											(*APIstruct.msg_intid_q_status)[0].stringstatuscode = CStatusCode
 											LogStatusText, EndStatuscode = checkMStateInQDS(StatusEntry)
 											if LogStatusText != DS_STATUSSTRING_Sending_na {
-												LogMsg := fmt.Sprintf("Client: %s, message local id: %d, remote id: %d to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
+												LogMsg := fmt.Sprintf("Client: %s, message local id: %d, remote id: %d to: %s ,status: %s", Msg.senderip, Msg.uintmsgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
 												APIstruct.loggerp.Println(LogMsg)
 											}
 										}
