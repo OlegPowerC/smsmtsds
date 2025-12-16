@@ -81,6 +81,11 @@ type MTSmessage struct {
 	To []MTSTo `json:"to"`
 }
 
+type MTSErrorCodeMsg struct {
+	ECode    int    `json:"code"`
+	EMessage string `json:"message"`
+}
+
 type MTSJson struct {
 	Messages []MTSmessage `json:"messages"`
 	Options  MTSOptions   `json:"options"`
@@ -197,11 +202,18 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 	}
 
 	var RespBodyData MTSRespFrom
+	var RespBodyErr MTSErrorCodeMsg
 	ummerr := json.Unmarshal(repbody, &RespBodyData)
 	if ummerr != nil {
 		return ummerr
 	}
 	if len(RespBodyData.Messages) == 0 {
+		ummerr = json.Unmarshal(repbody, &RespBodyErr)
+		if ummerr != nil {
+			if RespBodyErr.ECode != 0 {
+				return fmt.Errorf("error code: %d, error message: %s", RespBodyErr.ECode, RespBodyErr.EMessage)
+			}
+		}
 		return fmt.Errorf("error: no data")
 	}
 	if RespBodyData.Messages[0].MErrorcode > 0 {
