@@ -209,7 +209,7 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 	}
 	if len(RespBodyData.Messages) == 0 {
 		ummerr = json.Unmarshal(repbody, &RespBodyErr)
-		if ummerr != nil {
+		if ummerr == nil {
 			if RespBodyErr.ECode != 0 {
 				return fmt.Errorf("error code: %d, error message: %s", RespBodyErr.ECode, RespBodyErr.EMessage)
 			}
