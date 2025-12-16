@@ -161,9 +161,20 @@ func (APIstruct *SMSapi) statusMessageDS(IntId string, RemId string) (Resp SMSDi
 		return RespRecords, fmt.Errorf("APIstruct not initialized")
 	}
 
+	var KeysForWireshark io.Writer
+	KeysForWireshark = nil
+	if APIstruct.Debuggmode > 250 {
+		kf, fileerr := os.OpenFile("keys", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if fileerr != nil {
+			return RespRecords, fileerr
+		}
+		defer kf.Close()
+		KeysForWireshark = kf
+	}
 	//InsecureTF := true
 	tlsConfig := &tls.Config{
 		//InsecureSkipVerify: InsecureTF,
+		KeyLogWriter: KeysForWireshark,
 	}
 
 	transport := &http.Transport{TLSClientConfig: tlsConfig}

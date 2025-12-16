@@ -223,7 +223,20 @@ func (APIstruct *SMSapi) statusMessageMTS(IntId string) (Resp MTSResponse, StErr
 		return RespRecords, fmt.Errorf("APIstruct not initialized")
 	}
 
-	tlsConfig := &tls.Config{}
+	var KeysForWireshark io.Writer
+	KeysForWireshark = nil
+	if APIstruct.Debuggmode > 250 {
+		kf, fileerr := os.OpenFile("keys", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if fileerr != nil {
+			return RespRecords, fileerr
+		}
+		defer kf.Close()
+		KeysForWireshark = kf
+	}
+
+	tlsConfig := &tls.Config{
+		KeyLogWriter: KeysForWireshark,
+	}
 
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
 	client := &http.Client{Transport: transport, Timeout: time.Duration(APIstruct.HttTimeoutSeconds) * time.Second}
