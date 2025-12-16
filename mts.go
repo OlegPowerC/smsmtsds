@@ -2,20 +2,18 @@ package smsmtsds
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-const STATUSURL = "https://omnichannel.mts.ru/http-api/v1/messages/info"
-const SENDURL = "https://omnichannel.mts.ru/http-api/v1/messages"
 const STATUSCODE_Sending = 200
 const STATUSCODE_NotSent = 201
 const STATUSCODE_PartSending = 202
@@ -34,6 +32,7 @@ type SMSSettings struct {
 	Listenport         int    `xml:"listenport" json:"listenport"`
 	Numbertotallen     int    `json:"numbertotallen"`
 	Defaultcountrycode int    `json:"defaultcountrycode"`
+	SMSProvider        string `xml:"smsprovider" json:"smsprovider"`
 }
 
 type MTSRespEventInfo struct {
@@ -99,40 +98,38 @@ type MTSRespFrom struct {
 	Messages []MTSMsRet `json:"messages"`
 }
 
-func (APIstruct *SMSapi) Init() error {
-	ErrStr := ""
-	ErrCnt := 0
-	if len(APIstruct.Username) == 0 {
-		ErrStr += "please provide username "
-		ErrCnt++
+func checkMStateInQMTS(DataInQ *stfordata) (logmsg string, FinalStatusCode bool) {
+	EndStatuscode := false
+	LogStatusText := ""
+	switch DataInQ.statuscode {
+	case STATUSCODE_Sending:
+		//единственный случай когда мы будем пробовать получить статус позже
+		LogStatusText = "sending"
+		break
+	case STATUSCODE_NotSent:
+		LogStatusText = "not sent"
+		EndStatuscode = true
+		break
+	case STATUSCODE_PartSending:
+		LogStatusText = "part sent"
+		break
+	case STATUSCODE_Delivered:
+		LogStatusText = "delivered"
+		EndStatuscode = true
+		break
+	case STATUSCODE_NotDelivered:
+		LogStatusText = "not delivered"
+		EndStatuscode = true
+		break
+	case STATUSCODE_PartDelivered:
+		LogStatusText = "part delivered"
+		EndStatuscode = true
+		break
+	default:
+		LogStatusText = "status not available"
+		EndStatuscode = true
 	}
-	if len(APIstruct.Password) == 0 {
-		ErrStr += "please provide password "
-		ErrCnt++
-	}
-	if len(APIstruct.Logfile) == 0 {
-		ErrStr += "please provide logfile name  "
-		ErrCnt++
-	}
-
-	if ErrCnt > 0 {
-		return fmt.Errorf("%s", ErrStr)
-	}
-
-	Qdata := make([]stfordata, 0)
-	APIstruct.msg_intid_q_status = &Qdata
-
-	//Открываем файл лога
-	logFile, err := os.OpenFile(APIstruct.Logfile+"log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
-	if err != nil {
-		return err
-	}
-
-	APIstruct.loggerp = log.New(logFile, "", log.LstdFlags)
-	APIstruct.loggerp.Println(fmt.Sprintf("INFO: %s", "Start logging"))
-
-	APIstruct.initialized = true
-	return nil
+	return LogStatusText, EndStatuscode
 }
 
 func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Data string) error {
@@ -162,13 +159,13 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 	}
 
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	client := &http.Client{Transport: transport}
+	client := &http.Client{Transport: transport, Timeout: time.Duration(APIstruct.HttTimeoutSeconds) * time.Second}
 
 	var MTSj MTSJson
 	var MTSMsgEone MTSmessage
 	var MTSopt MTSOptions
-	APIstruct.CMsgIdInt += 1
-	MsgIds := fmt.Sprintf("MSGZID-%d", APIstruct.CMsgIdInt)
+	MsgId := atomic.AddUint64(&APIstruct.CMsgIdInt, 1)
+	MsgIds := fmt.Sprintf("MSGZID-%d", MsgId)
 	MTSMsgEone.Content.ShortText = Data
 	MTSMsgEone.To = append(MTSMsgEone.To, MTSTo{Msisdn: NormalizedNumber, MessageId: MsgIds})
 	MTSopt.From.SmsAddress = APIstruct.Naming
@@ -183,7 +180,7 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 		return Mer
 	}
 	//fmt.Println(string(Bt), Mer)
-	nreq, nerr := http.NewRequest("POST", SENDURL, bytes.NewBuffer(Bt))
+	nreq, nerr := http.NewRequest("POST", APIstruct.sendurl, bytes.NewBuffer(Bt))
 	if nerr != nil {
 		return nerr
 	}
@@ -193,7 +190,12 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 	if nresperr != nil {
 		return nresperr
 	}
-	repbody, _ := ioutil.ReadAll(nresp.Body)
+	defer nresp.Body.Close()
+	repbody, ioerr := io.ReadAll(nresp.Body)
+	if ioerr != nil {
+		return ioerr
+	}
+
 	var RespBodyData MTSRespFrom
 	ummerr := json.Unmarshal(repbody, &RespBodyData)
 	if ummerr != nil {
@@ -208,7 +210,7 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 	InternalId = RespBodyData.Messages[0].InternalId
 	if len(InternalId) > 0 {
 		APIstruct.msg_qmutex.Lock()
-		(*APIstruct.msg_intid_q_status) = append(*APIstruct.msg_intid_q_status, stfordata{time.Now().Unix(), MsgIds, InternalId, 0, 0, 0, "", ClienName, PhoneNumber})
+		(*APIstruct.msg_intid_q_status) = append(*APIstruct.msg_intid_q_status, stfordata{time.Now().Unix(), MsgIds, InternalId, 0, 0, 0, "", ClienName, PhoneNumber, 0})
 		APIstruct.msg_qmutex.Unlock()
 	}
 	return nil
@@ -221,20 +223,17 @@ func (APIstruct *SMSapi) statusMessageMTS(IntId string) (Resp MTSResponse, StErr
 		return RespRecords, fmt.Errorf("APIstruct not initialized")
 	}
 
-	//InsecureTF := true
-	tlsConfig := &tls.Config{
-		//InsecureSkipVerify: InsecureTF,
-	}
+	tlsConfig := &tls.Config{}
 
 	transport := &http.Transport{TLSClientConfig: tlsConfig}
-	client := &http.Client{Transport: transport}
+	client := &http.Client{Transport: transport, Timeout: time.Duration(APIstruct.HttTimeoutSeconds) * time.Second}
 
 	MTSStat.IntIds = append(MTSStat.IntIds, IntId)
 	JsonBody, BodyMarshalErr := json.Marshal(MTSStat)
 	if BodyMarshalErr != nil {
 		return RespRecords, BodyMarshalErr
 	}
-	sreq, serr := http.NewRequest("POST", STATUSURL, bytes.NewBuffer(JsonBody))
+	sreq, serr := http.NewRequest("POST", APIstruct.statusurl, bytes.NewBuffer(JsonBody))
 	if serr != nil {
 		return RespRecords, serr
 	}
@@ -244,79 +243,120 @@ func (APIstruct *SMSapi) statusMessageMTS(IntId string) (Resp MTSResponse, StErr
 	if sresperr != nil {
 		return RespRecords, sresperr
 	}
-	sepbody, _ := ioutil.ReadAll(sresp.Body)
-	RespUnErr := json.Unmarshal(sepbody, &RespRecords)
-	if RespUnErr == nil {
-		return RespRecords, RespUnErr
+	defer sresp.Body.Close()
+	sepbody, ioerr := io.ReadAll(sresp.Body)
+	if ioerr != nil {
+		return RespRecords, ioerr
 	}
 
+	RespUnErr := json.Unmarshal(sepbody, &RespRecords)
+	if RespUnErr != nil {
+		return RespRecords, RespUnErr
+	}
 	return RespRecords, nil
 }
 
-func (APIstruct *SMSapi) QStatus(wg sync.WaitGroup) {
+func (APIstruct *SMSapi) mtsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 	defer wg.Done()
 	if !APIstruct.initialized {
 		return
 	}
+	TimerCheckusers := time.NewTicker(1 * time.Second)
+
 	qstatcounter := 0
 	for {
-		if len(*APIstruct.msg_intid_q_status) > 0 {
-			EndStatuscode := false
+		select {
+		case <-ctx.Done():
+			TimerCheckusers.Stop()
+			return
+
+		case <-TimerCheckusers.C:
 			APIstruct.msg_qmutex.Lock()
-			Msg := (*APIstruct.msg_intid_q_status)[len((*APIstruct.msg_intid_q_status))-1]
-			if time.Now().Unix()-Msg.senttime >= 3 {
-				RespRecords, RsErr := APIstruct.statusMessageMTS(Msg.intmsgid)
-				if RsErr == nil {
-					CStatusCode := 0
-					for _, StatusEntry := range RespRecords.Events_infoAr {
-						for _, CEvents_info_int := range StatusEntry.Events_info_int {
-							LogStatusText := "status not avalible"
-							CStatusCode = CEvents_info_int.Status
-							if CStatusCode != Msg.statuscode {
-								(*APIstruct.msg_intid_q_status)[len((*APIstruct.msg_intid_q_status))-1].statuscode = CStatusCode
-								switch CStatusCode {
-								case STATUSCODE_Sending:
-									LogStatusText = "sending"
-									break
-								case STATUSCODE_NotSent:
-									LogStatusText = "not sent"
-									EndStatuscode = true
-									break
-								case STATUSCODE_PartSending:
-									LogStatusText = "part sent"
-									break
-								case STATUSCODE_Delivered:
-									LogStatusText = "delivered"
-									EndStatuscode = true
-									break
-								case STATUSCODE_NotDelivered:
-									LogStatusText = "not delivered"
-									EndStatuscode = true
-									break
-								case STATUSCODE_PartDelivered:
-									LogStatusText = "part delivered"
-									break
-								default:
-									LogStatusText = "status not avalible"
+			if len(*APIstruct.msg_intid_q_status) > 0 {
+				EndStatuscode := false
+				Msg := (*APIstruct.msg_intid_q_status)[0]
+				//Если прошло более 3 секунд с момента отправки сообщения, то получим статус отправки
+				if time.Now().Unix()-Msg.senttime >= 3 {
+					//Если прошла минута, а статус получить не можем то, более не будем пытаться
+					//Если прошло более 3 секунд с момента отправки сообщения, то получим статус отправки
+					if time.Now().Unix()-Msg.senttime >= 60 {
+						LogStatusText := "status not changed until 60 second"
+						LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.intmsgid, Msg.destination, LogStatusText)
+						APIstruct.loggerp.Println(LogMsg)
+						EndStatuscode = true
+					} else {
+						//Получаем статусы
+						APIstruct.msg_qmutex.Unlock()
+						RespRecords, RsErr := APIstruct.statusMessageMTS(Msg.intmsgid)
+						APIstruct.msg_qmutex.Lock()
+						//Повторно проверяем если в очереди на запрос статуса есть хотябы одно сообщение
+						if len(*APIstruct.msg_intid_q_status) > 0 {
+							if RsErr == nil {
+								CStatusCode := 0
+								for _, StatusEntry := range RespRecords.Events_infoAr {
+									for _, CEvents_info_int := range StatusEntry.Events_info_int {
+										var LogStatusText string
+										CStatusCode = CEvents_info_int.Status
+										if CStatusCode != Msg.statuscode {
+											(*APIstruct.msg_intid_q_status)[0].statuscode = CStatusCode
+											LogStatusText, EndStatuscode = checkMStateInQMTS(&(*APIstruct.msg_intid_q_status)[0])
+											/*switch CStatusCode {
+											case STATUSCODE_Sending:
+												//единственный случай когда мы будем пробовать получить статус позже
+												LogStatusText = "sending"
+												break
+											case STATUSCODE_NotSent:
+												LogStatusText = "not sent"
+												EndStatuscode = true
+												break
+											case STATUSCODE_PartSending:
+												LogStatusText = "part sent"
+												break
+											case STATUSCODE_Delivered:
+												LogStatusText = "delivered"
+												EndStatuscode = true
+												break
+											case STATUSCODE_NotDelivered:
+												LogStatusText = "not delivered"
+												EndStatuscode = true
+												break
+											case STATUSCODE_PartDelivered:
+												LogStatusText = "part delivered"
+												EndStatuscode = true
+												break
+											default:
+												LogStatusText = "status not avalible"
+												EndStatuscode = true
+											}
+
+											*/
+											LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.intmsgid, CEvents_info_int.Destination, LogStatusText)
+											APIstruct.loggerp.Println(LogMsg)
+										}
+									}
 								}
-								LogMsg := fmt.Sprintf("Client: %s, message to: %s ,startus: %s", Msg.senderip, CEvents_info_int.Destination, LogStatusText)
+							} else {
+								(*APIstruct.msg_intid_q_status)[0].getdataretr++
+								if (*APIstruct.msg_intid_q_status)[0].getdataretr >= 3 || time.Now().Unix()-Msg.senttime >= 30 {
+									EndStatuscode = true
+								}
+								LogMsg := fmt.Sprintf("API error: %s", RsErr)
 								APIstruct.loggerp.Println(LogMsg)
 							}
 						}
 					}
 				}
+				if EndStatuscode {
+					(*APIstruct.msg_intid_q_status) = (*APIstruct.msg_intid_q_status)[1:]
+				}
 			}
-			if EndStatuscode {
-				(*APIstruct.msg_intid_q_status) = (*APIstruct.msg_intid_q_status)[:len((*APIstruct.msg_intid_q_status))-1]
+			qstatcounter++
+			if qstatcounter >= 60 {
+				qstatcounter = 0
+				LogMsg := fmt.Sprintf("Status queue len: %d", len((*APIstruct.msg_intid_q_status)))
+				APIstruct.loggerp.Println(LogMsg)
 			}
 			APIstruct.msg_qmutex.Unlock()
-		}
-		time.Sleep(time.Second * 1)
-		qstatcounter++
-		if qstatcounter >= 60 {
-			qstatcounter = 0
-			LogMsg := fmt.Sprintf("Status quaue len: %d", len((*APIstruct.msg_intid_q_status)))
-			APIstruct.loggerp.Println(LogMsg)
 		}
 	}
 }
