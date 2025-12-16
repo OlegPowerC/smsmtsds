@@ -38,8 +38,8 @@ type SMSDiscontReqMessagesStatus struct {
 }
 
 type SMSDiscontReqMessageStatus struct {
-	ClientID string `json:"clientId"`
-	SMSID    string `json:"smscId"`
+	ClientID uint64 `json:"clientId"`
+	SMSID    uint64 `json:"smscId"`
 }
 
 type SMSDiscontMessagesStatus struct {
@@ -152,7 +152,7 @@ func (APIstruct *SMSapi) sendMessageDS(ClienName string, PhoneNumber string, Dat
 	return nil
 }
 
-func (APIstruct *SMSapi) statusMessageDS(IntId string, RemId string) (Resp SMSDiscontStatus, StErr error) {
+func (APIstruct *SMSapi) statusMessageDS(IntId uint64, RemId uint64) (Resp SMSDiscontStatus, StErr error) {
 	var DSGetStatus SMSDiscontReqMessagesStatus
 	var RespRecords SMSDiscontStatus
 	DSGetStatus.Login = APIstruct.Username
@@ -274,13 +274,13 @@ func (APIstruct *SMSapi) dsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 					//Если прошло более 3 секунд с момента отправки сообщения, то получим статус отправки
 					if time.Now().Unix()-Msg.senttime >= 60 {
 						LogStatusText := "status not changed until 60 second"
-						LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.intmsgid, Msg.destination, LogStatusText)
+						LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.uintmsgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
 						APIstruct.loggerp.Println(LogMsg)
 						EndStatuscode = true
 					} else {
 						//Получаем статусы
 						APIstruct.msg_qmutex.Unlock()
-						RespRecords, RsErr := APIstruct.statusMessageDS(Msg.msgid, Msg.intmsgid)
+						RespRecords, RsErr := APIstruct.statusMessageDS(Msg.uintmsgid, Msg.uintintmsgid)
 						APIstruct.msg_qmutex.Lock()
 						//Повторно проверяем если в очереди на запрос статуса есть хотябы одно сообщение
 						if len(*APIstruct.msg_intid_q_status) > 0 {
@@ -296,7 +296,7 @@ func (APIstruct *SMSapi) dsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 											(*APIstruct.msg_intid_q_status)[0].stringstatuscode = CStatusCode
 											LogStatusText, EndStatuscode = checkMStateInQDS(StatusEntry)
 											if LogStatusText != DS_STATUSSTRING_Sending_na {
-												LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.intmsgid, Msg.destination, LogStatusText)
+												LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.msgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
 												APIstruct.loggerp.Println(LogMsg)
 											}
 										}
