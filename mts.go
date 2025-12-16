@@ -364,7 +364,7 @@ func (APIstruct *SMSapi) mtsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 				}
 			}
 			qstatcounter++
-			if qstatcounter >= 60 {
+			if qstatcounter >= 3600 {
 				qstatcounter = 0
 				LogMsg := fmt.Sprintf("Status queue len: %d", len((*APIstruct.msg_intid_q_status)))
 				APIstruct.loggerp.Println(LogMsg)

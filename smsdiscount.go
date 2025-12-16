@@ -21,7 +21,7 @@ const DS_STATUSSTRING_Sending_Accepted = "accepted"
 const DS_STATUSSTRING_Sending_invalid = "sender address invalid"
 const DS_STATUSSTRING_Sending_rejected = "smsc reject"
 const DS_STATUSSTRING_Sending_delivered = "delivered"
-const DS_STATUSSTRING_Sending_smssubmit = "sms submit"
+const DS_STATUSSTRING_Sending_smssubmit = "smsc submit"
 const DS_STATUSSTRING_Sending_incorrect_id = "incorrect id"
 const DS_STATUSSTRING_Sending_delivery_error = "delivery error"
 
@@ -274,7 +274,7 @@ func (APIstruct *SMSapi) dsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 					//Если прошло более 3 секунд с момента отправки сообщения, то получим статус отправки
 					if time.Now().Unix()-Msg.senttime >= 60 {
 						LogStatusText := "status not changed until 60 second"
-						LogMsg := fmt.Sprintf("Client: %s, message local id: %s, remote id: %s to: %s ,status: %s", Msg.senderip, Msg.uintmsgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
+						LogMsg := fmt.Sprintf("Client: %s, message local id: %d, remote id: %d to: %s ,status: %s", Msg.senderip, Msg.uintmsgid, Msg.uintintmsgid, Msg.destination, LogStatusText)
 						APIstruct.loggerp.Println(LogMsg)
 						EndStatuscode = true
 					} else {
@@ -319,7 +319,7 @@ func (APIstruct *SMSapi) dsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 			}
 
 			qstatcounter++
-			if qstatcounter >= 60 {
+			if qstatcounter >= 3600 {
 				qstatcounter = 0
 				LogMsg := fmt.Sprintf("Status queue len: %d", len((*APIstruct.msg_intid_q_status)))
 				APIstruct.loggerp.Println(LogMsg)
