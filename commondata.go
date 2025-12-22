@@ -151,7 +151,7 @@ func (APIstruct *SMSapi) Init() error {
 	APIstruct.msg_intid_q_status = &Qdata
 
 	//Открываем файл лога
-	logFile, err := os.OpenFile(APIstruct.Logfile+"log.txt", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile(APIstruct.Logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		return err
 	}
