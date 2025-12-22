@@ -230,8 +230,7 @@ func checkMStateInQDS(DSmsgstatus SMSDiscontMessagesStatus) (logmsg string, Fina
 		LogStatusText = "queued"
 		break
 	case DS_STATUSSTRING_Sending_smssubmit:
-		LogStatusText = "SMS submit"
-		EndStatuscode = true
+		LogStatusText = "submit to SMSC"
 		break
 	case DS_STATUSSTRING_Sending_invalid:
 		LogStatusText = "sender address invalid"
