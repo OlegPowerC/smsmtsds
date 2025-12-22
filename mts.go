@@ -290,6 +290,7 @@ func (APIstruct *SMSapi) mtsQStatus(ctx context.Context, wg *sync.WaitGroup) {
 		return
 	}
 	TimerCheckusers := time.NewTicker(1 * time.Second)
+	defer TimerCheckusers.Stop()
 
 	qstatcounter := 0
 	for {

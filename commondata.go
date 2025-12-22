@@ -56,18 +56,26 @@ type stfordata struct {
 // Если номер формата +Код страны и номер то оставляем как есть
 // Если он формата 8 и номер, но меняем 8 на код страны по умолчанию
 func (APIstruct *SMSapi) NormalizePhoneNumber(number string) (normalizednumber string, nerr error) {
+	OriginalNumber := string(strings.ReplaceAll(number, "-", ""))
+	OriginalNumber = string(strings.ReplaceAll(OriginalNumber, "(", ""))
+	OriginalNumber = string(strings.ReplaceAll(OriginalNumber, ")", ""))
+	OriginalNumber = string(strings.ReplaceAll(OriginalNumber, " ", ""))
 	NormalizedNumber := ""
-	if len(number) < int(APIstruct.Totalnumberlen) {
-		return NormalizedNumber, fmt.Errorf("Номер: %s слишком короткий", number)
+	if len(OriginalNumber) < 3 {
+		return NormalizedNumber, fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)
 	}
-	if string(number[0]) == "+" {
-		NormalizedNumber = number[1:]
+	if string(OriginalNumber[0]) == "+" {
+		NormalizedNumber = OriginalNumber[1:]
 	} else {
-		if string(number[0]) == "8" {
-			NormalizedNumber = fmt.Sprintf("%d%s", APIstruct.Defaultcountrycode, number[1:])
+		if string(OriginalNumber[0]) == "8" {
+			NormalizedNumber = fmt.Sprintf("%d%s", APIstruct.Defaultcountrycode, OriginalNumber[1:])
 		} else {
-			NormalizedNumber = number
+			NormalizedNumber = OriginalNumber
 		}
+	}
+
+	if len(OriginalNumber) < int(APIstruct.Totalnumberlen) {
+		return NormalizedNumber, fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)
 	}
 	return NormalizedNumber, nil
 }
