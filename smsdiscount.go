@@ -130,9 +130,7 @@ func (APIstruct *SMSapi) sendMessageDS(ClienName string, PhoneNumber string, Dat
 	if ummerr != nil {
 		return ummerr
 	}
-	if len(RespBodyData.Messages) == 0 {
-		return fmt.Errorf("error: no data")
-	}
+
 	if strings.ToLower(RespBodyData.Status) != "ok" {
 		return fmt.Errorf("status: %s, description: %s", RespBodyData.Status, RespBodyData.Description)
 	}
@@ -142,6 +140,11 @@ func (APIstruct *SMSapi) sendMessageDS(ClienName string, PhoneNumber string, Dat
 			return fmt.Errorf("status: %s, messagestatus: %s", RespBodyData.Status, RespBodyData.Messages[0].Status)
 		}
 	}
+
+	if len(RespBodyData.Messages) == 0 {
+		return fmt.Errorf("error: no data")
+	}
+
 	InternalId := RespBodyData.Messages[0].SMSID
 	if InternalId > 0 {
 		APIstruct.msg_qmutex.Lock()
