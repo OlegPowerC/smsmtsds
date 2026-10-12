@@ -139,7 +139,8 @@ func checkMStateInQMTS(DataInQ *stfordata) (logmsg string, FinalStatusCode bool)
 
 func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Data string) error {
 	if !APIstruct.initialized {
-		return fmt.Errorf("API Struct not inicialized")
+		//return fmt.Errorf("API Struct not inicialized")
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("API Struct not inicialized")}
 	}
 	NormalizedNumber, NnErr := APIstruct.NormalizePhoneNumber(PhoneNumber)
 	if NnErr != nil {
@@ -152,7 +153,8 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 	if APIstruct.Debuggmode > 250 {
 		kf, fileerr := os.OpenFile("keys", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if fileerr != nil {
-			return fileerr
+			//return fileerr
+			return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fileerr}
 		}
 		defer kf.Close()
 		KeysForWireshark = kf
@@ -182,42 +184,55 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 
 	Bt, Mer := json.Marshal(MTSj)
 	if Mer != nil {
-		return Mer
+		//return Mer
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: Mer}
 	}
 	//fmt.Println(string(Bt), Mer)
 	nreq, nerr := http.NewRequest("POST", APIstruct.sendurl, bytes.NewBuffer(Bt))
 	if nerr != nil {
-		return nerr
+		//return nerr
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: nerr}
 	}
 	nreq.SetBasicAuth(APIstruct.Username, APIstruct.Password)
 	nreq.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	nresp, nresperr := client.Do(nreq)
 	if nresperr != nil {
-		return nresperr
+		//return nresperr
+		return SMSErr{FatalErr: true, ErrSource: ERR_SOURCE_SMS, FErr: nresperr}
 	}
 	defer nresp.Body.Close()
+
+	if nresp.StatusCode < http.StatusOK || nresp.StatusCode >= http.StatusMultipleChoices {
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: SMSApiErr{HTTPCode: nresp.StatusCode, FatalErr: true, ErrSource: ERR_SOURCE_SMS}}
+	}
+
 	repbody, ioerr := io.ReadAll(nresp.Body)
 	if ioerr != nil {
-		return ioerr
+		//return ioerr
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: ioerr}
 	}
 
 	var RespBodyData MTSRespFrom
 	var RespBodyErr MTSErrorCodeMsg
 	ummerr := json.Unmarshal(repbody, &RespBodyData)
 	if ummerr != nil {
-		return ummerr
+		//return ummerr
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: ummerr}
 	}
 	if len(RespBodyData.Messages) == 0 {
 		ummerr = json.Unmarshal(repbody, &RespBodyErr)
 		if ummerr == nil {
 			if RespBodyErr.ECode != 0 {
-				return fmt.Errorf("error code: %d, error message: %s", RespBodyErr.ECode, RespBodyErr.EMessage)
+				//return fmt.Errorf("error code: %d, error message: %s", RespBodyErr.ECode, RespBodyErr.EMessage)
+				return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("error code: %d, error message: %s", RespBodyErr.ECode, RespBodyErr.EMessage)}
 			}
 		}
-		return fmt.Errorf("error: no data")
+		//return fmt.Errorf("error: no data")
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("error: no data")}
 	}
 	if RespBodyData.Messages[0].MErrorcode > 0 {
-		return fmt.Errorf("error: %d, %s", RespBodyData.Messages[0].MErrorcode, RespBodyData.Messages[0].MErrormessage)
+		//return fmt.Errorf("error: %d, %s", RespBodyData.Messages[0].MErrorcode, RespBodyData.Messages[0].MErrormessage)
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("error: %d, %s", RespBodyData.Messages[0].MErrorcode, RespBodyData.Messages[0].MErrormessage)}
 	}
 	InternalId = RespBodyData.Messages[0].InternalId
 	if len(InternalId) > 0 {
@@ -235,7 +250,9 @@ func (APIstruct *SMSapi) statusMessageMTS(IntId string) (Resp MTSResponse, StErr
 	var MTSStat MTSGetStatus
 	var RespRecords MTSResponse
 	if !APIstruct.initialized {
-		return RespRecords, fmt.Errorf("APIstruct not initialized")
+		//return RespRecords, fmt.Errorf("APIstruct not initialized")
+		return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("APIstruct not initialized")}
+
 	}
 
 	var KeysForWireshark io.Writer
@@ -243,7 +260,8 @@ func (APIstruct *SMSapi) statusMessageMTS(IntId string) (Resp MTSResponse, StErr
 	if APIstruct.Debuggmode > 250 {
 		kf, fileerr := os.OpenFile("keys", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 		if fileerr != nil {
-			return RespRecords, fileerr
+			//return RespRecords, fileerr
+			return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fileerr}
 		}
 		defer kf.Close()
 		KeysForWireshark = kf
@@ -259,27 +277,35 @@ func (APIstruct *SMSapi) statusMessageMTS(IntId string) (Resp MTSResponse, StErr
 	MTSStat.IntIds = append(MTSStat.IntIds, IntId)
 	JsonBody, BodyMarshalErr := json.Marshal(MTSStat)
 	if BodyMarshalErr != nil {
-		return RespRecords, BodyMarshalErr
+		//return RespRecords, BodyMarshalErr
+		return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: BodyMarshalErr}
 	}
 	sreq, serr := http.NewRequest("POST", APIstruct.statusurl, bytes.NewBuffer(JsonBody))
 	if serr != nil {
-		return RespRecords, serr
+		//return RespRecords, serr
+		return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: serr}
 	}
 	sreq.SetBasicAuth(APIstruct.Username, APIstruct.Password)
 	sreq.Header.Set("Content-Type", "application/json; charset=UTF-8")
 	sresp, sresperr := client.Do(sreq)
 	if sresperr != nil {
-		return RespRecords, sresperr
+		//return RespRecords, sresperr
+		return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: sresperr}
 	}
 	defer sresp.Body.Close()
+	if sresp.StatusCode < http.StatusOK || sresp.StatusCode >= http.StatusMultipleChoices {
+		return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: SMSApiErr{HTTPCode: sresp.StatusCode, FatalErr: true, ErrSource: ERR_SOURCE_SMS}}
+	}
 	sepbody, ioerr := io.ReadAll(sresp.Body)
 	if ioerr != nil {
-		return RespRecords, ioerr
+		//return RespRecords, ioerr
+		return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: ioerr}
 	}
 
 	RespUnErr := json.Unmarshal(sepbody, &RespRecords)
 	if RespUnErr != nil {
-		return RespRecords, RespUnErr
+		//return RespRecords, RespUnErr
+		return RespRecords, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: RespUnErr}
 	}
 	return RespRecords, nil
 }

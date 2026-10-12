@@ -20,6 +20,22 @@ const HTTP_MAX_TIMEOUT_SEC = 30
 const SMS_PROVIDER_STRINGNAME_MTS = "mts"
 const SMS_PROVIDER_STRINGNAME_DS = "sms discount"
 
+const ERR_SOURCE_SMS = 3
+
+type SMSErr struct {
+	ErrSource int
+	FatalErr  bool
+	FErr      error
+}
+
+type SMSApiErr struct {
+	ErrSource int
+	FatalErr  bool
+	HTTPCode  int
+	BodyCode  int
+	FErr      error
+}
+
 type SMSapi struct {
 	sendurl            string
 	statusurl          string
@@ -62,7 +78,8 @@ func (APIstruct *SMSapi) NormalizePhoneNumber(number string) (normalizednumber s
 	OriginalNumber = string(strings.ReplaceAll(OriginalNumber, " ", ""))
 	NormalizedNumber := ""
 	if len(OriginalNumber) < 3 {
-		return NormalizedNumber, fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)
+		//return NormalizedNumber, fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)
+		return NormalizedNumber, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)}
 	}
 	if string(OriginalNumber[0]) == "+" {
 		NormalizedNumber = OriginalNumber[1:]
@@ -75,7 +92,8 @@ func (APIstruct *SMSapi) NormalizePhoneNumber(number string) (normalizednumber s
 	}
 
 	if len(OriginalNumber) < int(APIstruct.Totalnumberlen) {
-		return NormalizedNumber, fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)
+		//return NormalizedNumber, fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)
+		return NormalizedNumber, SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("Номер: %s слишком короткий", OriginalNumber)}
 	}
 	return NormalizedNumber, nil
 }
@@ -125,7 +143,8 @@ func (APIstruct *SMSapi) Init() error {
 	}
 
 	if ErrCnt > 0 {
-		return fmt.Errorf("%s", ErrStr)
+		//return fmt.Errorf("%s", ErrStr)
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("%s", ErrStr)}
 	}
 
 	switch strings.TrimSpace(strings.ToLower(APIstruct.SMSProviderName)) {
@@ -140,7 +159,8 @@ func (APIstruct *SMSapi) Init() error {
 		APIstruct.statusurl = DSSTATUSURL
 		break
 	default:
-		return fmt.Errorf("SMS provider not supported")
+		//return fmt.Errorf("SMS provider not supported")
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: fmt.Errorf("SMS provider not supported")}
 	}
 
 	if APIstruct.HttTimeoutSeconds == 0 || APIstruct.HttTimeoutSeconds > HTTP_MAX_TIMEOUT_SEC {
@@ -153,7 +173,8 @@ func (APIstruct *SMSapi) Init() error {
 	//Открываем файл лога
 	logFile, err := os.OpenFile(APIstruct.Logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
-		return err
+		//return err
+		return SMSErr{FatalErr: false, ErrSource: ERR_SOURCE_SMS, FErr: err}
 	}
 
 	APIstruct.loggerp = log.New(logFile, "", log.LstdFlags)
@@ -161,4 +182,30 @@ func (APIstruct *SMSapi) Init() error {
 
 	APIstruct.initialized = true
 	return nil
+}
+
+// Реализуем методы для своих типов ошибки
+func (e SMSErr) Error() string {
+	fatalstr := ""
+	if e.FatalErr {
+		fatalstr = " fatal,"
+	}
+	return fmt.Sprintf("error source: %d,%s error description: %v", e.ErrSource, fatalstr, e.FErr)
+}
+
+func (e SMSErr) Unwrap() error {
+	return e.FErr
+}
+
+// Реализуем методы для своих типов ошибки
+func (e SMSApiErr) Error() string {
+	fatalstr := ""
+	if e.FatalErr {
+		fatalstr = " fatal,"
+	}
+	return fmt.Sprintf("error source: %d,%s http code: %d error description: %v", e.ErrSource, fatalstr, e.HTTPCode, e.FErr)
+}
+
+func (e SMSApiErr) Unwrap() error {
+	return e.FErr
 }
