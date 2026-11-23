@@ -165,7 +165,7 @@ func (APIstruct *SMSapi) sendMessageMTS(ClienName string, PhoneNumber string, Da
 		KeyLogWriter: KeysForWireshark,
 	}
 
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{TLSClientConfig: tlsConfig, DisableKeepAlives: true}
 	client := &http.Client{Transport: transport, Timeout: time.Duration(APIstruct.HttTimeoutSeconds) * time.Second}
 
 	var MTSj MTSJson
@@ -271,7 +271,7 @@ func (APIstruct *SMSapi) statusMessageMTS(IntId string) (Resp MTSResponse, StErr
 		KeyLogWriter: KeysForWireshark,
 	}
 
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{TLSClientConfig: tlsConfig, DisableKeepAlives: true}
 	client := &http.Client{Transport: transport, Timeout: time.Duration(APIstruct.HttTimeoutSeconds) * time.Second}
 
 	MTSStat.IntIds = append(MTSStat.IntIds, IntId)

@@ -94,7 +94,7 @@ func (APIstruct *SMSapi) sendMessageDS(ClienName string, PhoneNumber string, Dat
 		KeyLogWriter: KeysForWireshark,
 	}
 
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{TLSClientConfig: tlsConfig, DisableKeepAlives: true}
 	client := &http.Client{Transport: transport, Timeout: time.Duration(APIstruct.HttTimeoutSeconds) * time.Second}
 
 	var JsData SMSDiscont
@@ -197,7 +197,7 @@ func (APIstruct *SMSapi) statusMessageDS(IntId uint64, RemId uint64) (Resp SMSDi
 		KeyLogWriter: KeysForWireshark,
 	}
 
-	transport := &http.Transport{TLSClientConfig: tlsConfig}
+	transport := &http.Transport{TLSClientConfig: tlsConfig, DisableKeepAlives: true}
 	client := &http.Client{Transport: transport, Timeout: time.Duration(APIstruct.HttTimeoutSeconds) * time.Second}
 
 	DSGetStatus.Messages = append(DSGetStatus.Messages, SMSDiscontReqMessageStatus{ClientID: IntId, SMSID: RemId})
